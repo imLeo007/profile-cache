@@ -1,4 +1,4 @@
-# User Profile Cache API
+# ProfileCache API
 
 A backend project built to understand one important question:
 
@@ -20,20 +20,14 @@ So this project introduces a cache between the application and the database.
 
 The main idea is simple:
 
-```text
-Request
-   ↓
-Check Cache
-   ↓
- ┌───────────────┐
- │               │
-Hit             Miss
- │               │
-Return       Read Database
-                 ↓
-             Save to Cache
-                 ↓
-               Return
+```mermaid
+flowchart TD
+    A[Request] --> B[Check Cache]
+    B --> C{Cache Hit?}
+    C -->|Hit| D[Return]
+    C -->|Miss| E[Read Database]
+    E --> F[Save to Cache]
+    F --> D
 ```
 
 The interesting part was not simply making reads faster.
@@ -52,44 +46,26 @@ The application follows a simple rule:
 
 For a profile request:
 
-```text
-User Request
-     ↓
-FastAPI
-     ↓
-Redis
-     ↓
-Cache Hit?
-   ↙     ↘
- Yes     No
- ↓        ↓
-Return   PostgreSQL
-          ↓
-       Save Result
-       in Redis
-          ↓
-        Return
+```mermaid
+flowchart TD
+    A[User Request] --> B[FastAPI]
+    B --> C[Redis]
+    C --> D{Cache Hit?}
+    D -->|Yes| E[Return]
+    D -->|No| F[PostgreSQL]
+    F --> G[Save Result in Redis]
+    G --> E
 ```
 
 When a profile changes:
 
-```text
-Update Database
-      ↓
-Remove Old Cache
-      ↓
-Next Request Gets Fresh Data
+```mermaid
+flowchart LR
+    A[Update Database] --> B[Remove Old Cache]
+    B --> C[Next Request Gets Fresh Data]
 ```
 
 This keeps performance and correctness working together.
-
----
-
-## Pipeline
-
-> The clean architecture diagram for this section will show how **FastAPI, Redis, PostgreSQL, and Docker** work together.
-
-![User Profile Cache API Pipeline](screenshots/user-profile-cache-api.png)
 
 ---
 
@@ -120,32 +96,23 @@ Imagine a user requests:
 
 Redis does not have the profile yet.
 
-```text
-Request
-   ↓
-Redis
-   ↓
-MISS
-   ↓
-PostgreSQL
-   ↓
-Profile Found
-   ↓
-Store in Redis
-   ↓
-Return Profile
+```mermaid
+flowchart TD
+    A[Request] --> B[Redis]
+    B --> C[Cache MISS]
+    C --> D[PostgreSQL]
+    D --> E[Profile Found]
+    E --> F[Store in Redis]
+    F --> G[Return Profile]
 ```
 
 ### Next request
 
-```text
-Request
-   ↓
-Redis
-   ↓
-HIT
-   ↓
-Return Profile
+```mermaid
+flowchart TD
+    A[Request] --> B[Redis]
+    B --> C[Cache HIT]
+    C --> D[Return Profile]
 ```
 
 The second request avoids another database read.
@@ -174,16 +141,12 @@ If the cached version stays untouched, users may continue receiving the old valu
 
 So after an update:
 
-```text
-Update PostgreSQL
-       ↓
-Delete Cached Profile
-       ↓
-Next Request
-       ↓
-Read Fresh Database Value
-       ↓
-Cache Again
+```mermaid
+flowchart TD
+    A[Update PostgreSQL] --> B[Delete Cached Profile]
+    B --> C[Next Request]
+    C --> D[Read Fresh Database Value]
+    D --> E[Cache Again]
 ```
 
 This is **cache invalidation**.
@@ -196,100 +159,19 @@ It was one of the most important ideas I wanted to understand through this proje
 
 The same rule applies when a profile is deleted.
 
-```text
-Delete From Database
-        ↓
-Delete From Cache
-        ↓
-Profile No Longer Exists
+```mermaid
+flowchart LR
+    A[Delete From Database] --> B[Delete From Cache]
+    B --> C[Profile No Longer Exists]
 ```
 
 The cache should never behave as though deleted data still exists.
 
 ---
 
-## Project Structure
-
-```text
-user_profile_api/
-│
-├── app/
-│   ├── core/
-│   │   ├── database.py
-│   │   └── redis_client.py
-│   │
-│   ├── models/
-│   │   └── user.py
-│   │
-│   ├── schemas/
-│   │   └── profile_model.py
-│   │
-│   ├── routers/
-│   │   └── user.py
-│   │
-│   └── main.py
-│
-├── alembic/
-├── screenshots/
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-├── .env
-└── README.md
-```
-
-The application is split so database logic, caching, API routes, validation, and startup behaviour remain easy to understand independently.
-
----
-
-## Running the Project
-
-Clone the repository:
-
-```bash
-git clone https://github.com/imLeo007/user-profile-cache-api.git
-cd user-profile-cache-api
-```
-
-Create your environment variables, then start the services:
-
-```bash
-docker compose up --build
-```
-
-Run the database migrations:
-
-```bash
-docker compose exec api alembic upgrade head
-```
-
-Open the API documentation:
-
-```text
-http://localhost:8000/docs
-```
-
-Live API:
-
-```text
-https://user-profile-cache-api.onrender.com/docs
-```
-
----
-
-## Application Preview
-
-### API Overview
+## API Overview
 
 ![Swagger Overview](screenshots/Swagger_UI.png)
-
-### Creating a User
-
-![Create User](screenshots/add_user.png)
-
-### Reading a Cached User
-
-![Get Cached User](screenshots/user_cache.png)
 
 ---
 
@@ -299,19 +181,17 @@ This project changed how I think about caching.
 
 Before building it, caching looked like:
 
-```text
-Store data in Redis
-→ make things faster
+```mermaid
+flowchart LR
+    A[Store data in Redis] --> B[Make things faster]
 ```
 
 After building it, the real idea became:
 
-```text
-Read efficiently
-        +
-Keep cached data correct
-        +
-Know when the database must remain the source of truth
+```mermaid
+flowchart LR
+    A[Read efficiently] --> B[Keep cached data correct]
+    B --> C[Know when the database must remain the source of truth]
 ```
 
 The important lesson was:
@@ -326,19 +206,12 @@ This project was one of my first steps from building simple CRUD applications to
 
 It introduced several questions that matter in larger systems:
 
-```text
-Where should data come from?
-
-What happens when cached data becomes old?
-
-Which system is the source of truth?
-
-When should cached information expire?
-
-What should happen after an update or delete?
-
-How should multiple services communicate?
-```
+- Where should data come from?
+- What happens when cached data becomes old?
+- Which system is the source of truth?
+- When should cached information expire?
+- What should happen after an update or delete?
+- How should multiple services communicate?
 
 Understanding those questions became more valuable than simply learning another library.
 
@@ -346,23 +219,62 @@ Understanding those questions became more valuable than simply learning another 
 
 ## Project Progression
 
-```text
-CRUD API
-   ↓
-Persistent Database
-   ↓
-Caching
-   ↓
-Cache Invalidation
-   ↓
-Multiple Services
-   ↓
-Deployment
-   ↓
-More Reliable Backend Systems
+```mermaid
+flowchart LR
+    A[CRUD API] --> B[Persistent Database]
+    B --> C[Caching]
+    C --> D[Cache Invalidation]
+    D --> E[Multiple Services]
+    E --> F[Deployment]
+    F --> G[More Reliable Backend Systems]
 ```
 
 This project became an important foundation for the more complex backend and AI systems I started building afterward.
+
+---
+
+## Running the Project
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/imLeo007/user-profile-cache-api.git
+cd user-profile-cache-api
+```
+
+### 2. Configure the environment
+
+Create a `.env` file with the database and Redis configuration expected by the application.
+
+### 3. Build and start the services
+
+```bash
+docker compose up --build
+```
+
+This starts FastAPI, PostgreSQL, and Redis as connected services.
+
+### 4. Run database migrations
+
+```bash
+docker compose exec api alembic upgrade head
+```
+
+### 5. Open Swagger UI
+
+```text
+http://localhost:8000/docs
+```
+
+### 6. Try the cache-aside flow
+
+Create a user profile, retrieve it once to populate Redis, and retrieve it again to observe the cached read path. Update or delete the profile to exercise cache invalidation.
+
+### 7. Open the live API
+
+```text
+https://user-profile-cache-api.onrender.com/docs
+```
 
 ---
 
