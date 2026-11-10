@@ -21,7 +21,7 @@ So this project introduces a cache between the application and the database.
 The main idea is simple:
 
 ```mermaid
-flowchart TD
+flowchart LR
     A[Request] --> B[Check Cache]
     B --> C{Cache Hit?}
     C -->|Hit| D[Return]
@@ -47,7 +47,7 @@ The application follows a simple rule:
 For a profile request:
 
 ```mermaid
-flowchart TD
+flowchart LR
     A[User Request] --> B[FastAPI]
     B --> C[Redis]
     C --> D{Cache Hit?}
@@ -81,91 +81,6 @@ This keeps performance and correctness working together.
 - Remove stale cache after updates and deletes
 - Run the application as multiple connected services
 - Apply database migrations safely
-
----
-
-## What Happens During a Read?
-
-Imagine a user requests:
-
-```text
-/users/10
-```
-
-### First request
-
-Redis does not have the profile yet.
-
-```mermaid
-flowchart TD
-    A[Request] --> B[Redis]
-    B --> C[Cache MISS]
-    C --> D[PostgreSQL]
-    D --> E[Profile Found]
-    E --> F[Store in Redis]
-    F --> G[Return Profile]
-```
-
-### Next request
-
-```mermaid
-flowchart TD
-    A[Request] --> B[Redis]
-    B --> C[Cache HIT]
-    C --> D[Return Profile]
-```
-
-The second request avoids another database read.
-
----
-
-## What Happens During an Update?
-
-Caching introduces an important problem.
-
-Suppose Redis contains:
-
-```text
-Name: Alex
-Age: 21
-```
-
-Then the database is updated to:
-
-```text
-Name: Alex
-Age: 22
-```
-
-If the cached version stays untouched, users may continue receiving the old value.
-
-So after an update:
-
-```mermaid
-flowchart TD
-    A[Update PostgreSQL] --> B[Delete Cached Profile]
-    B --> C[Next Request]
-    C --> D[Read Fresh Database Value]
-    D --> E[Cache Again]
-```
-
-This is **cache invalidation**.
-
-It was one of the most important ideas I wanted to understand through this project.
-
----
-
-## What Happens During a Delete?
-
-The same rule applies when a profile is deleted.
-
-```mermaid
-flowchart LR
-    A[Delete From Database] --> B[Delete From Cache]
-    B --> C[Profile No Longer Exists]
-```
-
-The cache should never behave as though deleted data still exists.
 
 ---
 
@@ -214,22 +129,6 @@ It introduced several questions that matter in larger systems:
 - How should multiple services communicate?
 
 Understanding those questions became more valuable than simply learning another library.
-
----
-
-## Project Progression
-
-```mermaid
-flowchart LR
-    A[CRUD API] --> B[Persistent Database]
-    B --> C[Caching]
-    C --> D[Cache Invalidation]
-    D --> E[Multiple Services]
-    E --> F[Deployment]
-    F --> G[More Reliable Backend Systems]
-```
-
-This project became an important foundation for the more complex backend and AI systems I started building afterward.
 
 ---
 
